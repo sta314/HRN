@@ -65,7 +65,7 @@ def get_scheduler(optimizer, opt):
     return scheduler
 
 
-def init_weights(net, init_type='normal', init_gain=0.02):
+def init_weights(net, init_type='normal', init_gain=0.02, verbose=False):
     """Initialize network weights.
 
     Parameters:
@@ -94,8 +94,8 @@ def init_weights(net, init_type='normal', init_gain=0.02):
         elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
-
-    print('initialize network with %s' % init_type)
+    if verbose:
+        print('initialize network with %s' % init_type)
     net.apply(init_func)  # apply the initialization function <init_func>
 
 

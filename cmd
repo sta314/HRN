@@ -1,0 +1,1 @@
+python demo.py --input_type single_view --input_root ./assets/examples/custom_imgs --output_root ./assets/examples/custom_imgs_results

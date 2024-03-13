@@ -34,7 +34,8 @@ class ParametricFaceModel:
                 focal=1015.,
                 center=112.,
                 is_train=True,
-                default_name='BFM_model_front.mat'):
+                default_name='BFM_model_front.mat', 
+                verbose=False):
         
         if not os.path.isfile(os.path.join(bfm_folder, default_name)):
             transferBFM09(bfm_folder)
@@ -43,23 +44,28 @@ class ParametricFaceModel:
         self.mean_shape_ori = model_bfm_front['meanshape'].astype(np.float32)
         # mean face shape. [3*N,1]
         self.mean_shape = model['meanshape'].astype(np.float32)  # (1, 107127)
-        print('mean_shape:{}'.format(self.mean_shape.shape))
+        if verbose:
+            print('mean_shape:{}'.format(self.mean_shape.shape))
 
         # identity basis. [3*N,80]
         self.id_base = model['idBase'].astype(np.float32)  # (107127, 80)
-        print('id_base:{}'.format(self.id_base.shape))
+        if verbose:
+            print('id_base:{}'.format(self.id_base.shape))
 
         # expression basis. [3*N,64]
         self.exp_base = model['exBase'].astype(np.float32)  # (107127, 64)
-        print('exp_base:{}'.format(self.exp_base.shape))
+        if verbose:
+            print('exp_base:{}'.format(self.exp_base.shape))
 
         # mean face texture. [3*N,1] (0-255)
         self.mean_tex = model['meantex'].astype(np.float32)  # (1, 107127)
-        print('mean_tex:{}'.format(self.mean_tex.shape))
+        if verbose:
+            print('mean_tex:{}'.format(self.mean_tex.shape))
 
         # texture basis. [3*N,80]
         self.tex_base = model['texBase'].astype(np.float32) # (107127, 80)
-        print('tex_base:{}'.format(self.tex_base.shape))
+        if verbose:
+            print('tex_base:{}'.format(self.tex_base.shape))
 
         self.mean_tex_uv = np.load('assets/3dmm_assets/bfm_albedo_map_basis/bfm_tex_mean2.npy')
         self.mean_tex_uv = self.mean_tex_uv.reshape((1, -1))
@@ -71,12 +77,14 @@ class ParametricFaceModel:
 
         # face indices for each vertex that lies in. starts from 0. [N,8]
         self.point_buf = model['point_buf'].astype(np.int64) - 1  # (35709, 8)
-        print('point_buf:{}'.format(self.point_buf.shape))
-        print('view point_buf:{}'.format(self.point_buf[:3, :]))
+        if verbose:
+            print('point_buf:{}'.format(self.point_buf.shape))
+            print('view point_buf:{}'.format(self.point_buf[:3, :]))
 
         # vertex indices for each face. starts from 0. [F,3]
         self.face_buf = model['tri'].astype(np.int64) - 1  # (70789, 3)
-        print('face_buf shape:{}'.format(self.face_buf.shape))
+        if verbose:
+            print('face_buf shape:{}'.format(self.face_buf.shape))
 
         # vertex indices for 68 landmarks. starts from 0. [68,1]
         self.keypoints = np.squeeze(model['keypoints']).astype(np.int64) - 1
@@ -536,8 +544,8 @@ class ParametricFaceModel:
             init_angle = torch.zeros_like(coef_dict['angle']).to(coef_dict['angle'].device)
 
             pi = 3.14
-            n_frame = 30
-            y_angles = torch.linspace(-pi / 6, pi / 6, steps=n_frame).float()
+            n_frame = 1
+            y_angles = torch.linspace(0, 0, steps=n_frame).float()
 
             extra_results['face_shape_transformed_list'] = []
             extra_results['face_norm_roted_list'] = []
@@ -597,7 +605,7 @@ class ParametricFaceModel:
             tex_high_gray = self.recolor_texture(tex_high_gray)
             extra_results['tex_high_gray'] = tex_high_gray
 
-            if 'face_shape_transformed_list' in extra_results:
+            if 'face_shape_transformed_list' in extra_results: # len 30
                 extra_results['tex_high_gray_list'] = []
                 extra_results['tex_high_color_list'] = []
                 for i in range(len(extra_results['face_shape_transformed_list'])):

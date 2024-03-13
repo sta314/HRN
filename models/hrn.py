@@ -14,6 +14,8 @@ from util.util_ import resize_on_long_side, split_vis
 import face_alignment
 import tensorflow as tf
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
 
 if tf.__version__ >= '2.0':
     tf = tf.compat.v1
@@ -35,7 +37,7 @@ class Reconstructor():
         self.model.eval()
         self.model.set_render(opt, image_res=512)
 
-        self.lm_sess = face_alignment.FaceAlignment(face_alignment.LandmarksType._3D, flip_input=False)
+        self.lm_sess = face_alignment.FaceAlignment(face_alignment.LandmarksType.THREE_D, flip_input=False)
 
         config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.per_process_gpu_memory_fraction = 0.2
@@ -44,7 +46,7 @@ class Reconstructor():
         self.face_sess = tf.Session(graph=g1, config=config)
         with self.face_sess.as_default():
             with g1.as_default():
-                with tf.gfile.FastGFile('assets/pretrained_models/segment_face.pb', 'rb') as f:
+                with tf.gfile.GFile('assets/pretrained_models/segment_face.pb', 'rb') as f:
                     graph_def = tf.GraphDef()
                     graph_def.ParseFromString(f.read())
                     self.face_sess.graph.as_default()
@@ -79,7 +81,7 @@ class Reconstructor():
     def parse_label(self, label):
         return torch.tensor(np.array(label).astype(np.float32))
 
-    def prepare_data(self, img, lm_sess, five_points=None):
+    def prepare_data(self, img, lm_sess, five_points=None, use_threshold=True):
         input_img, scale, bbox = align_for_lm(img, five_points)  # align for 68 landmark detection
 
         if scale == 0:
@@ -90,7 +92,30 @@ class Reconstructor():
             input_img, [1, 224, 224, 3]).astype(np.float32)
 
         input_img = input_img[0, :, :, ::-1]
-        landmark = lm_sess.get_landmarks_from_image(input_img)[0]
+        
+        result, landmarks_scores, detected_faces = lm_sess.get_landmarks_from_image(input_img, return_bboxes = True, return_landmark_score=True) # EDIT
+
+        if result is None:
+            return None
+        
+        # print(np.array(landmarks_scores).shape)
+        # print(np.array(detected_faces).shape)
+        # print(np.array(landmarks_scores).mean(axis=1))
+        # print(np.array(detected_faces))
+        # print(np.array(detected_faces)[:, -1])
+        # print(np.array(detected_faces)[:, -1].argmax())
+    
+        main_subject_idx = np.array(detected_faces)[:, -1].argmax()
+        result_sbj = result[main_subject_idx]
+        facescore_sbj = np.array(detected_faces)[main_subject_idx][-1]
+        landmarkscore_sbj = np.array(landmarks_scores)[main_subject_idx].mean()
+
+        if use_threshold:
+            result_sbj = None if facescore_sbj < 0.99 or landmarkscore_sbj < 0.7 else result_sbj
+            if result_sbj is None:
+                return None
+    
+        landmark = result_sbj
 
         landmark = landmark[:, :2] / scale
         landmark[:, 0] = landmark[:, 0] + bbox[0]
@@ -107,13 +132,16 @@ class Reconstructor():
         input_img = input_img_tensor.permute(0, 2, 3, 1).detach().cpu().numpy()[0] * 255.
         input_img = input_img.astype(np.uint8)
 
-        input_img_for_texture = self.face_mark_model.fat_face(input_img, degree=0.03)
+        result = self.face_mark_model.fat_face(input_img, degree=0.03)
+        if result is None: # EDIT if face not detected
+            return None
+        input_img_for_texture = result
         input_img_for_texture_tensor = torch.tensor(np.array(input_img_for_texture) / 255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
         input_img_for_texture_tensor = input_img_for_texture_tensor.to(self.model.device)
         return input_img_for_texture_tensor
 
 
-    def predict_base(self, img, out_dir=None, save_name=''):
+    def predict_base(self, img, out_dir=None, save_name='', use_threshold=True):
 
         timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
         if save_name:
@@ -130,9 +158,8 @@ class Reconstructor():
         #     cv2.imwrite(img_path, img)
 
         box, results = self.face_mark_model.infer(img)
-
         if results is None or np.array(results).shape[0] == 0:
-            return {}
+            return None
 
         # t1 = time.time()
         # fatbgr = self.face_mark_model.fat_face(img, degree=0.005)
@@ -145,7 +172,10 @@ class Reconstructor():
             landmarks.append([results[idx][0], results[idx][1]])
         landmarks = np.array(landmarks)
 
-        landmarks = self.prepare_data(img, self.lm_sess, five_points=landmarks)
+        landmarks = self.prepare_data(img, self.lm_sess, five_points=landmarks, use_threshold=use_threshold)
+
+        if landmarks is None:
+            return None
 
         im_tensor, lm_tensor, im_hd_tensor, lm_hd_tensor, mask = self.read_data(img, landmarks, self.lm3d_std, image_res=512, img_fat=fatbgr)
         # M = estimate_norm(lm_tensor.numpy()[0], im_tensor.shape[2])
@@ -186,7 +216,7 @@ class Reconstructor():
 
             # save coefficients
             coeffs = output['coeffs'].detach().cpu().numpy()  # (1, 257)
-            np.save(os.path.join(out_dir, img_name + '_coeffs'), coeffs)
+            # np.save(os.path.join(out_dir, img_name + '_coeffs'), coeffs)
 
             # # save albedo map
             # albedo_map = (output['albedo_map'].permute(0, 2, 3, 1)[0] * 255.0).detach().cpu().numpy()
@@ -195,7 +225,7 @@ class Reconstructor():
 
             # save position map
             position_map = output['position_map'].detach().cpu().numpy()  # (1, 3, h, w)
-            np.save(os.path.join(out_dir, img_name + '_position_map'), position_map)
+            # np.save(os.path.join(out_dir, img_name + '_position_map'), position_map)
             position_map_vis = position_map.transpose(0, 2, 3, 1)[0, ..., ::-1]
             position_map_vis = 255.0 * (position_map_vis - position_map_vis.min()) / (position_map_vis.max() - position_map_vis.min())
             cv2.imwrite(os.path.join(out_dir, img_name + '_position_map_vis.jpg'), position_map_vis)
@@ -214,7 +244,7 @@ class Reconstructor():
 
             # save gt lms
             gt_lm = output['gt_lm'].detach().cpu().numpy()  # (1, 68, 2)
-            np.save(os.path.join(out_dir, img_name + '_lmks'), gt_lm)
+            # np.save(os.path.join(out_dir, img_name + '_lmks'), gt_lm)
 
             # save face mask
             face_mask = (output['face_mask'][0, 0] * 255.0).detach().cpu().numpy()
@@ -233,12 +263,22 @@ class Reconstructor():
 
         return output
 
-    def predict(self, img, visualize=False, out_dir=None, save_name=''):
+    def predict(self, img, visualize=False, out_dir=None, save_name='', use_threshold=True):
         with torch.no_grad():
-            output = self.predict_base(img)
-
-            output['input_img_for_tex'] = self.get_img_for_texture(output['input_img'])
-
+            result = self.predict_base(img, use_threshold=use_threshold)
+            if result is None: # EDIT if face not detected
+                if hasattr(self.model, "extra_results"):
+                    self.model.extra_results = None
+                self.model.save_results(out_dir, save_name)
+                return None
+            output = result
+            result = self.get_img_for_texture(output['input_img'])
+            if result is None: # EDIT if face not detected
+                if hasattr(self.model, "extra_results"):
+                    self.model.extra_results = None
+                self.model.save_results(out_dir, save_name)
+                return None
+            output['input_img_for_tex'] = result
             hrn_input = {
                 'input_img': output['input_img'],
                 'input_img_for_tex': output['input_img_for_tex'],
@@ -251,22 +291,18 @@ class Reconstructor():
                 'tex_valid_mask': output['tex_valid_mask'],
                 'de_retouched_albedo_map': output['de_retouched_albedo_map']
             }
-
             self.model.set_input_hrn(hrn_input)
             self.model.get_edge_points_horizontal()
-
             self.model.forward_hrn(visualize=visualize)
-
             output['deformation_map'] = self.model.deformation_map
             output['displacement_map'] = self.model.displacement_map
 
             if out_dir is not None:
                 t1 = time.time()
                 results = self.model.save_results(out_dir, save_name)
-                print('save results', time.time() - t1)
+                # print('save results', time.time() - t1)
 
                 output['hrn_output_vis'] = results['output_vis']
-
         return output
 
     def predict_multi_view(self, img_list, visualize=False, out_dir=None, save_name='test'):

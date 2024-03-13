@@ -19,11 +19,15 @@ def run_hrn(args):
     print('predict', args.input_root)
 
     for ind, name in enumerate(tqdm(names)):
+        print(name)
         save_name = os.path.splitext(name)[0]
-        out_dir = os.path.join(args.output_root, save_name)
+        # out_dir = os.path.join(args.output_root, save_name)
+        out_dir = args.output_root # save without a subdirectory
         os.makedirs(out_dir, exist_ok=True)
         img = cv2.imread(os.path.join(args.input_root, name))
         output = reconstructor.predict(img, visualize=True, save_name=save_name, out_dir=out_dir)
+        if output is None:
+            print(f"{name} failed!")
 
     print('results are saved to:', args.output_root)
 

@@ -217,6 +217,10 @@ class LargeModelInfer:
 
         boxes, landmarks = self.infer(image)
         landmarks = np.array(landmarks)
+
+        if landmarks.shape[0] == 0: # EDIT if face not detected
+            return None
+        
         # print('boxes:{}'.format(boxes))
         canvas_channels = 9  # 8个link + 1个整体
 
@@ -349,7 +353,10 @@ class LargeModelInfer:
 
         _img, scale = resize_on_long_side(img, 400)
 
-        contour_maps, boxes = self.find_face_contour(_img)
+        result = self.find_face_contour(_img)
+        if result is None: # EDIT if face not detected
+            return None
+        contour_maps, boxes = result
 
         # print('|' * 50, 'time find_face_contour: {}'.format(time.time() - t1))
         # cv2.imwrite(f'all_joint.jpg', np.column_stack(contour_maps))

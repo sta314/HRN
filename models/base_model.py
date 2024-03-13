@@ -265,7 +265,7 @@ class BaseModel(ABC):
         else:
             self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
 
-    def load_networks(self, epoch):
+    def load_networks(self, epoch, verbose=False):
         """Load all the networks from the disk.
 
         Parameters:
@@ -278,7 +278,8 @@ class BaseModel(ABC):
         load_filename = 'epoch_%s.pth' % (epoch)
         load_path = os.path.join(load_dir, load_filename)
         state_dict = torch.load(load_path, map_location=self.device)
-        print('loading the model from %s' % load_path)
+        if verbose:
+            print('loading the model from %s' % load_path)
 
         for name in self.model_names:
             if isinstance(name, str):
