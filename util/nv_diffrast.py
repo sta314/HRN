@@ -82,7 +82,7 @@ class MeshRenderer(nn.Module):
 
         vertex_ndc = vertex @ ndc_proj.t()
         if self.glctx is None:
-            self.glctx = dr.RasterizeGLContext(device=device)
+            self.glctx = dr.RasterizeCudaContext(device=device)
             # print("create glctx on device cuda:%d"%device.index)
 
         # print('vertex_ndc shape:{}'.format(vertex_ndc.shape))  # Size([1, 35709, 4])
@@ -170,7 +170,7 @@ class MeshRenderer(nn.Module):
 
         vertex_ndc = vertex @ ndc_proj.t()
         if self.glctx is None:
-            self.glctx = dr.RasterizeGLContext(device=device)
+            self.glctx = dr.RasterizeCudaContext(device=device)
             # print("create glctx on device cuda:%d" % device.index)
 
         # print('vertex_ndc shape:{}'.format(vertex_ndc.shape))  # Size([1, 35709, 4])
@@ -241,7 +241,7 @@ class MeshRenderer(nn.Module):
 
         vertex_ndc = vertex @ ndc_proj.t()
         if self.glctx is None:
-            self.glctx = dr.RasterizeGLContext(device=device)
+            self.glctx = dr.RasterizeCudaContext(device=device)
             # print("create glctx on device cuda:%d" % device.index)
 
         # print('vertex_ndc shape:{}'.format(vertex_ndc.shape))  # Size([1, 35709, 4])

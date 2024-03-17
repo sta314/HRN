@@ -6,8 +6,11 @@ import cv2
 from tqdm import tqdm
 import shutil
 import numpy as np
+import argparse
 
-def video_extract_frames_and_audio(video_path, output_frames_dir, output_audio_dir):
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
+def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir, output_audio_dir):
     frames_dir = output_frames_dir
     audio_dir = output_audio_dir
     os.makedirs(frames_dir, exist_ok=True)
@@ -17,9 +20,23 @@ def video_extract_frames_and_audio(video_path, output_frames_dir, output_audio_d
 
     fps = video_clip.fps
 
-    for i, frame in tqdm(enumerate(video_clip.iter_frames())):
+    import concurrent.futures
+
+    def process_frame(frame, box, frames_dir, i):
+        x1, y1, x2, y2 = box
+        cropped_frame = frame[y1:y2, x1:x2] if x1 != -1 else np.zeros((224, 224, 3), dtype=np.uint8)
         frame_path = os.path.join(frames_dir, f'{i}.png')
-        imageio.imwrite(frame_path, frame)
+        imageio.imwrite(frame_path, cropped_frame)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = []
+        for i, frame in enumerate(video_clip.iter_frames()):
+            if i >= len(boxes):
+                break
+            box = boxes[i]
+            future = executor.submit(process_frame, frame, box, frames_dir, i)
+            futures.append(future)
+        concurrent.futures.wait(futures)
 
     audio_path = os.path.join(audio_dir, 'audio.mp3')
     video_clip.audio.write_audiofile(audio_path, logger=None)
@@ -27,19 +44,6 @@ def video_extract_frames_and_audio(video_path, output_frames_dir, output_audio_d
     video_clip.close()
 
     return fps
-
-def crop_frames(input_frames_dir, boxes, output_crops_dir):
-    os.makedirs(output_crops_dir, exist_ok=True)
-
-    for i, box in enumerate(boxes):
-        frame_path = os.path.join(input_frames_dir, f'{i}.png')
-        frame = imageio.imread(frame_path)
-
-        x1, y1, x2, y2 = box
-        cropped_frame = frame[y1:y2, x1:x2] if x1 != -1 else np.zeros((224, 224, 3), dtype=np.uint8)
-
-        output_path = os.path.join(output_crops_dir, f'{i}.png')
-        imageio.imwrite(output_path, cropped_frame)
 
 def recreate_video_from_frames(fps, frames_dir, audio_path, output_path):
     frame_files = [f for f in os.listdir(frames_dir) if f.endswith('.jpg')]
@@ -87,37 +91,45 @@ def run_hrn(in_dir, out_dir):
     ]
 
     reconstructor = Reconstructor(params)
+    names = [name for name in os.listdir(args['input_root']) if '.jpg' in name or '.png' in name or '.jpeg' in name or '.PNG' in name or '.JPG' in name or '.JPEG' in name]
+    names = sorted(names, key=lambda f: int(f.split('.')[0]))
 
-    names = sorted([name for name in os.listdir(args['input_root']) if '.jpg' in name or '.png' in name or '.jpeg' in name or '.PNG' in name or '.JPG' in name or '.JPEG' in name])
+    images = []
+    for name in names:
+        img = cv2.imread(os.path.join(args['input_root'], name))
+        images.append(img)
 
-    for _, name in enumerate(tqdm(names)):
-        save_name = os.path.splitext(name)[0]
+    for i, img in enumerate(tqdm(images)):
+        save_name = os.path.splitext(names[i])[0]
         out_dir = args['output_root']
         os.makedirs(out_dir, exist_ok=True)
-        img = cv2.imread(os.path.join(args['input_root'], name))
         reconstructor.predict(img, visualize=True, save_name=save_name, out_dir=out_dir, use_threshold=True)
 
-media_dir = 'media_mancrop'
+parser = argparse.ArgumentParser()
+parser.add_argument('--media_dir', default='media_mancrop', help='Directory for input files')
+parser.add_argument('--output_dir', default='output', help='Directory for outputs')
+args = parser.parse_args()
+
+media_dir = args.media_dir
 input_dir = os.path.join(media_dir, 'input') # folder that contains videos to be processed
 input_videos_dir = os.path.join(input_dir, 'videos')
 input_frameinfo_dir = os.path.join(input_dir, 'faces')
 
-output_dir = os.path.join(media_dir, 'output') # folder to output results
+output_dir = os.path.join(media_dir, args.output_dir) # folder to output results
 
 temporary_dir = os.path.join(media_dir, 'temporary') # folder for storing temporary files
 
 frames_dir = os.path.join(temporary_dir, 'frames') # folder for storing temporary frames
-crops_dir = os.path.join(temporary_dir, 'crops') # folder for storing temporary crops
 audio_dir = os.path.join(temporary_dir, 'audio') # folder for storing temporary audio
 
 video_list = os.listdir(input_videos_dir)
-
 for i, video_name in enumerate(video_list):
 
     video_name_base = os.path.splitext(video_name)[0]
     instance_frameinfo_dir = os.path.join(input_frameinfo_dir, video_name_base)
     instance_output_dir = os.path.join(output_dir, video_name_base)
     instance_output_frames_dir = os.path.join(instance_output_dir, 'frames')
+    instance_video_path = os.path.join(input_videos_dir, video_name)
 
     frame_infos = list()
 
@@ -131,20 +143,29 @@ for i, video_name in enumerate(video_list):
             frame_info = [int(x) for x in first_line.split()]
             frame_infos.append(frame_info)
 
-    instance_output_dir = os.path.join(output_dir, os.path.splitext(video_name)[0])
+    if os.path.exists(temporary_dir) and os.path.isdir(temporary_dir):
+        shutil.rmtree(temporary_dir)
+
+    instance_output_dir = os.path.join(output_dir, video_name_base)
     instance_output_frames_dir = os.path.join(instance_output_dir, 'frames')
     print('{}/{} - Starting processing for the video {}'.format(i+1, len(video_list), video_name))
-    print('Extracting frames from the video')
-    fps = video_extract_frames_and_audio(os.path.join(input_videos_dir, video_name), frames_dir, audio_dir)
-    print('Cropping the frames')
-    crop_frames(frames_dir, frame_infos, crops_dir)
+    print('Extracting frames from the video and cropping')
+    fps = video_extract_cropped_frames_and_audio(instance_video_path, frame_infos, frames_dir, audio_dir)
     print('Executing the pipeline for every frame')
-    run_hrn(crops_dir, instance_output_frames_dir)
+    run_hrn(frames_dir, instance_output_frames_dir)
     print('Merging resulting frames for recreating the video')
-    recreate_video_from_frames(fps, instance_output_frames_dir, os.path.join(audio_dir, 'audio.mp3'), os.path.join(instance_output_dir, 'reconstruction.mp4'))
+    recreate_video_from_frames(30, instance_output_frames_dir, os.path.join(audio_dir, 'audio.mp3'), os.path.join(instance_output_dir, 'reconstruction.mp4'))
     print('Merging original video with recreated video for visualization purposes')
-    merge_original_and_reconstructed_videos(os.path.join(input_videos_dir, video_name), os.path.join(instance_output_dir, 'reconstruction.mp4'), os.path.join(instance_output_dir, 'merged.mp4'))
-    # shutil.copytree(temporary_dir, os.path.join(instance_output_dir, os.path.basename(temporary_dir)))
-    shutil.rmtree(temporary_dir)
+    merge_original_and_reconstructed_videos(instance_video_path, os.path.join(instance_output_dir, 'reconstruction.mp4'), os.path.join(instance_output_dir, 'merged.mp4'))
+
+    # remove the instance
+    if os.path.exists(instance_video_path):
+        os.remove(instance_video_path)
+    if os.path.exists(instance_frameinfo_dir) and os.path.isdir(instance_frameinfo_dir):
+        shutil.rmtree(instance_frameinfo_dir)
+
+    if os.path.exists(temporary_dir) and os.path.isdir(temporary_dir):
+        shutil.rmtree(temporary_dir)
+
     print('{}/{} - Finished processing video {}'.format(i+1, len(video_list), video_name))
     print('-' * 30)
