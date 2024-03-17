@@ -781,10 +781,11 @@ class FaceReconModel(BaseModel):
                 output_vis_numpy / 255., dtype=torch.float32
             ).permute(0, 3, 1, 2).to(self.device)
 
-    def save_results(self, out_dir, save_name='test', only_result=True): # EDIT Output edited as desired
+    def save_results(self, out_frames_dir, out_angles_dir, save_name='test', only_result=True): # EDIT Output edited as desired
 
         if not hasattr(self, "extra_results") or self.extra_results is None or 'pred_face_high_color_list' not in self.extra_results:
-            imageio.imwrite(os.path.join(out_dir, save_name + '.jpg'), np.zeros((224, 224 if only_result else 448, 3), dtype=np.uint8))
+            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), np.zeros((224, 224 if only_result else 448, 3), dtype=np.uint8))
+            np.savetxt(os.path.join(out_angles_dir, save_name + '.txt'), np.array([[-1., -1., -1.], [-1., -1., -1.]]), delimiter=' ', fmt='%f') 
             return None
 
         self.compute_visuals_hrn()
@@ -819,7 +820,11 @@ class FaceReconModel(BaseModel):
             video_2_i = cv2.resize(video_2_i, (h, h))
 
             cat_image = video_2_i if only_result else np.concatenate([static_image, video_2_i], axis=1)
-            imageio.imwrite(os.path.join(out_dir, save_name + '.jpg'), cat_image[..., ::-1])  # Saving as a single image instead of GIF
+            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), cat_image[..., ::-1])  # Saving as a single image instead of GIF
+
+        # Save angles
+        out_txt_path = os.path.join(out_angles_dir, save_name + '.txt')
+        np.savetxt(out_txt_path, self.angles, delimiter=' ', fmt='%f') # first line radians, second line degrees
 
         return results
 

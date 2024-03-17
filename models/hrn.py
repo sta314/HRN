@@ -13,6 +13,7 @@ import PIL.Image
 from util.util_ import resize_on_long_side, split_vis
 import face_alignment
 import tensorflow as tf
+import math
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
@@ -116,6 +117,7 @@ class Reconstructor():
                 return None
     
         landmark = result_sbj
+        landmark_raw = landmark.copy()
 
         landmark = landmark[:, :2] / scale
         landmark[:, 0] = landmark[:, 0] + bbox[0]
@@ -126,7 +128,7 @@ class Reconstructor():
         # att_mask = PIL.Image.fromarray(cv2.cvtColor(att_mask,cv2.COLOR_BGR2RGB))
         # print('get att_mask', time.time() - t1)
 
-        return landmark
+        return landmark, landmark_raw
 
     def get_img_for_texture(self, input_img_tensor):
         input_img = input_img_tensor.permute(0, 2, 3, 1).detach().cpu().numpy()[0] * 255.
@@ -139,6 +141,33 @@ class Reconstructor():
         input_img_for_texture_tensor = torch.tensor(np.array(input_img_for_texture) / 255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
         input_img_for_texture_tensor = input_img_for_texture_tensor.to(self.model.device)
         return input_img_for_texture_tensor
+
+    def calculate_angles(self, landmarks): # gist.github.com/zalo/71fbd5dbfe23cb46406d211b84be9f7e
+        def rotationMatrixToEulerAngles(R):
+            sy = math.sqrt(R[0,0] * R[0,0] + R[1,0] * R[1,0])
+            singular = sy < 1e-6
+            if not singular :
+                x = math.atan2(R[2,1] , R[2,2])
+                y = math.atan2(-R[2,0], sy)
+                z = math.atan2(R[1,0], R[0,0])
+            else :
+                x = math.atan2(-R[1,2], R[1,1])
+                y = math.atan2(-R[2,0], sy)
+                z = 0
+            return np.array([x, y, z])
+
+        scaled = (landmarks / np.linalg.norm(landmarks[42] - landmarks[39])) * 0.06 # 60 mm pupillary
+        centered = scaled - np.mean(scaled, axis=0)
+
+        rotationMatrix = np.empty((3,3))
+        rotationMatrix[0,:] = (centered[16] - centered[0])/np.linalg.norm(centered[16] - centered[0])
+        rotationMatrix[1,:] = (centered[8] - centered[27])/np.linalg.norm(centered[8] - centered[27])
+        rotationMatrix[2,:] = np.cross(rotationMatrix[0, :], rotationMatrix[1, :])
+        
+        eulerAngles = rotationMatrixToEulerAngles(rotationMatrix)
+        pitch, yaw, roll = eulerAngles
+
+        return np.array([[pitch, roll, yaw], [math.degrees(pitch), math.degrees(roll), math.degrees(yaw)]])
 
 
     def predict_base(self, img, out_dir=None, save_name='', use_threshold=True):
@@ -172,7 +201,9 @@ class Reconstructor():
             landmarks.append([results[idx][0], results[idx][1]])
         landmarks = np.array(landmarks)
 
-        landmarks = self.prepare_data(img, self.lm_sess, five_points=landmarks, use_threshold=use_threshold)
+        landmarks, landmarks_raw = self.prepare_data(img, self.lm_sess, five_points=landmarks, use_threshold=use_threshold)
+
+        self.model.angles = self.calculate_angles(landmarks_raw)
 
         if landmarks is None:
             return None
@@ -263,20 +294,20 @@ class Reconstructor():
 
         return output
 
-    def predict(self, img, visualize=False, out_dir=None, save_name='', use_threshold=True):
+    def predict(self, img, visualize=False, out_frames_dir=None, out_angles_dir=None, save_name='', use_threshold=True):
         with torch.no_grad():
             result = self.predict_base(img, use_threshold=use_threshold)
             if result is None: # EDIT if face not detected
                 if hasattr(self.model, "extra_results"):
                     self.model.extra_results = None
-                self.model.save_results(out_dir, save_name)
+                self.model.save_results(out_frames_dir, out_angles_dir, save_name)
                 return None
             output = result
             result = self.get_img_for_texture(output['input_img'])
             if result is None: # EDIT if face not detected
                 if hasattr(self.model, "extra_results"):
                     self.model.extra_results = None
-                self.model.save_results(out_dir, save_name)
+                self.model.save_results(out_frames_dir, out_angles_dir, save_name)
                 return None
             output['input_img_for_tex'] = result
             hrn_input = {
@@ -297,9 +328,9 @@ class Reconstructor():
             output['deformation_map'] = self.model.deformation_map
             output['displacement_map'] = self.model.displacement_map
 
-            if out_dir is not None:
+            if out_frames_dir is not None:
                 t1 = time.time()
-                results = self.model.save_results(out_dir, save_name)
+                results = self.model.save_results(out_frames_dir, out_angles_dir, save_name)
                 # print('save results', time.time() - t1)
 
                 output['hrn_output_vis'] = results['output_vis']
