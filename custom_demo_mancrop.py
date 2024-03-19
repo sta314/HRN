@@ -8,7 +8,7 @@ import shutil
 import numpy as np
 import argparse
 
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir, output_audio_dir):
     frames_dir = output_frames_dir
@@ -123,7 +123,7 @@ output_dir = os.path.join(media_dir, args.output_dir) # folder to output results
 temporary_dir = os.path.join(media_dir, 'temporary') # folder for storing temporary files
 
 frames_dir = os.path.join(temporary_dir, 'frames') # folder for storing temporary frames
-audio_dir = os.path.join(temporary_dir, 'audio') # folder for storing temporary audio
+audio_dir = os.path.join(temporary_dir, 'audio')   # folder for storing temporary audio
 
 video_list = os.listdir(input_videos_dir)
 for i, video_name in enumerate(video_list):

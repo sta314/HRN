@@ -823,8 +823,19 @@ class FaceReconModel(BaseModel):
             imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), cat_image[..., ::-1])  # Saving as a single image instead of GIF
 
         # Save angles
-        out_txt_path = os.path.join(out_angles_dir, save_name + '.txt')
-        np.savetxt(out_txt_path, self.angles, delimiter=' ', fmt='%f') # first line radians, second line degrees
+        # out_txt_path = os.path.join(out_angles_dir, save_name + '.txt')
+        # np.savetxt(out_txt_path, self.angles, delimiter=' ', fmt='%f') # first line radians, second line degrees
+
+        # Save landmarks
+        # print(self.landmarks_3D) # 3D
+        # print(self.extra_results["landmarks_crop"]) # Crop
+        # print(self.extra_results["landmarks_recon"]) # Recon
+
+        # Save bounding box
+        # print(self.bbox)
+
+        # Save 257 coeffs
+        # print(self.pred_coeffs_dict)
 
         return results
 

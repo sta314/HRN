@@ -513,6 +513,9 @@ class ParametricFaceModel:
         extra_results = None
         if visualize:
             extra_results = {}
+
+            extra_results['landmarks_crop'] = landmark
+
             extra_results['tex_mid_color'] = face_color_map
 
             face_shape_transformed_base = self.transform(face_shape_base, rotation, coef_dict['trans'])
@@ -558,6 +561,10 @@ class ParametricFaceModel:
                 cur_face_shape_transformed = self.transform(face_shape, cur_rotation, coef_dict['trans'] * 0)
                 cur_face_norm_roted = face_norm @ cur_rotation
                 cur_face_vertex = self.to_camera(cur_face_shape_transformed.clone())
+
+                face_proj = self.to_image(cur_face_vertex)
+                landmarks_recon = self.get_landmarks(face_proj)
+                extra_results['landmarks_recon'] = landmarks_recon
 
                 extra_results['face_shape_transformed_list'].append(cur_face_shape_transformed)
                 extra_results['face_norm_roted_list'].append(cur_face_norm_roted)
