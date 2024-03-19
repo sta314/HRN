@@ -8,7 +8,7 @@ import shutil
 import numpy as np
 import argparse
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir, output_audio_dir):
     frames_dir = output_frames_dir

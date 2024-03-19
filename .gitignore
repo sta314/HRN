@@ -1,5 +1,5 @@
 .idea
 __pycache__
 assets/*
-media_mancrop/*
-media_mancrop2/*
+media_*
+media_*
