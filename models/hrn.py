@@ -97,15 +97,6 @@ class Reconstructor():
         result, landmarks_scores, detected_faces = lm_sess.get_landmarks_from_image(input_img, return_bboxes = True, return_landmark_score=True) # EDIT
         if result is None:
             return None
-        
-        self.model.bbox = bbox
-        
-        # print(np.array(landmarks_scores).shape)
-        # print(np.array(detected_faces).shape)
-        # print(np.array(landmarks_scores).mean(axis=1))
-        # print(np.array(detected_faces))
-        # print(np.array(detected_faces)[:, -1])
-        # print(np.array(detected_faces)[:, -1].argmax())
     
         main_subject_idx = np.array(detected_faces)[:, -1].argmax()
         result_sbj = result[main_subject_idx]
@@ -118,18 +109,22 @@ class Reconstructor():
                 return None
     
         landmark = result_sbj
-        landmark_raw = landmark.copy()
+        landmark_3D = landmark.copy()
 
         landmark = landmark[:, :2] / scale
         landmark[:, 0] = landmark[:, 0] + bbox[0]
         landmark[:, 1] = landmark[:, 1] + bbox[1]
+
+        landmark_3D[:, :2] = landmark_3D[:, :2] / scale
+        landmark_3D[:, 0] = landmark_3D[:, 0] + bbox[0]
+        landmark_3D[:, 1] = landmark_3D[:, 1] + bbox[1]
 
         # t1 = time.time()
         # att_mask = skinmask(img)
         # att_mask = PIL.Image.fromarray(cv2.cvtColor(att_mask,cv2.COLOR_BGR2RGB))
         # print('get att_mask', time.time() - t1)
 
-        return landmark, landmark_raw
+        return landmark, landmark_3D
 
     def get_img_for_texture(self, input_img_tensor):
         input_img = input_img_tensor.permute(0, 2, 3, 1).detach().cpu().numpy()[0] * 255.
@@ -174,9 +169,9 @@ class Reconstructor():
             landmarks.append([results[idx][0], results[idx][1]])
         landmarks = np.array(landmarks)
 
-        landmarks, landmarks_raw = self.prepare_data(img, self.lm_sess, five_points=landmarks, use_threshold=use_threshold)
+        landmarks, landmarks_3D = self.prepare_data(img, self.lm_sess, five_points=landmarks, use_threshold=use_threshold)
 
-        self.model.landmarks_3D = landmarks_raw
+        self.model.landmarks_3D = landmarks_3D
 
         if landmarks is None:
             return None
@@ -267,20 +262,20 @@ class Reconstructor():
 
         return output
 
-    def predict(self, img, visualize=False, out_frames_dir=None, out_angles_dir=None, save_name='', use_threshold=True):
+    def predict(self, img, visualize=False, out_frames_dir=None, out_extras_dir=None, save_name='', use_threshold=True):
         with torch.no_grad():
             result = self.predict_base(img, use_threshold=use_threshold)
             if result is None: # EDIT if face not detected
                 if hasattr(self.model, "extra_results"):
                     self.model.extra_results = None
-                self.model.save_results(out_frames_dir, out_angles_dir, save_name)
+                self.model.save_results(out_frames_dir, out_extras_dir, save_name)
                 return None
             output = result
             result = self.get_img_for_texture(output['input_img'])
             if result is None: # EDIT if face not detected
                 if hasattr(self.model, "extra_results"):
                     self.model.extra_results = None
-                self.model.save_results(out_frames_dir, out_angles_dir, save_name)
+                self.model.save_results(out_frames_dir, out_extras_dir, save_name)
                 return None
             output['input_img_for_tex'] = result
             hrn_input = {
@@ -303,7 +298,7 @@ class Reconstructor():
 
             if out_frames_dir is not None:
                 t1 = time.time()
-                results = self.model.save_results(out_frames_dir, out_angles_dir, save_name)
+                results = self.model.save_results(out_frames_dir, out_extras_dir, save_name)
                 # print('save results', time.time() - t1)
 
                 output['hrn_output_vis'] = results['output_vis']

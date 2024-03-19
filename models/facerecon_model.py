@@ -388,6 +388,7 @@ class FaceReconModel(BaseModel):
                                                                        self.pred_color_high)
 
         self.pred_coeffs_dict = self.facemodel_front.split_coeff(self.coeffs)
+        self.pred_coeffs = self.coeffs
 
         if visualize: # EDIT this is where images are rendered, into pred_face_high_gray_list and other one
             # high
@@ -781,11 +782,11 @@ class FaceReconModel(BaseModel):
                 output_vis_numpy / 255., dtype=torch.float32
             ).permute(0, 3, 1, 2).to(self.device)
 
-    def save_results(self, out_frames_dir, out_angles_dir, save_name='test', only_result=True): # EDIT Output edited as desired
+    def save_results(self, out_frames_dir, out_extras_dir, save_name='test'): # EDIT Output edited as desired
 
-        if not hasattr(self, "extra_results") or self.extra_results is None or 'pred_face_high_color_list' not in self.extra_results:
-            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), np.zeros((224, 224 if only_result else 448, 3), dtype=np.uint8))
-            np.savetxt(os.path.join(out_angles_dir, save_name + '.txt'), np.array([[-1., -1., -1.], [-1., -1., -1.]]), delimiter=' ', fmt='%f') 
+        if not hasattr(self, "extra_results") or self.extra_results is None or 'pred_face_high_color_list' not in self.extra_results: # TO BE FIXED
+            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), np.zeros((224, 224, 3), dtype=np.uint8))
+            np.savetxt(os.path.join(out_extras_dir, save_name + '.txt'), np.array([[-1., -1., -1.], [-1., -1., -1.]]), delimiter=' ', fmt='%f') 
             return None
 
         self.compute_visuals_hrn()
@@ -819,23 +820,33 @@ class FaceReconModel(BaseModel):
             video_2_i = pred_face_color  # Index 14 corresponds to the 15th image
             video_2_i = cv2.resize(video_2_i, (h, h))
 
-            cat_image = video_2_i if only_result else np.concatenate([static_image, video_2_i], axis=1)
-            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), cat_image[..., ::-1])  # Saving as a single image instead of GIF
+            imageio.imwrite(os.path.join(out_frames_dir, save_name + '.jpg'), video_2_i[..., ::-1])  # Saving as a single image instead of GIF
 
-        # Save angles
-        # out_txt_path = os.path.join(out_angles_dir, save_name + '.txt')
-        # np.savetxt(out_txt_path, self.angles, delimiter=' ', fmt='%f') # first line radians, second line degrees
+            crops_folder = os.path.join(out_extras_dir, 'crops')
+            os.makedirs(crops_folder, exist_ok=True)
+            imageio.imwrite(os.path.join(crops_folder, save_name + '.jpg'), static_image[..., ::-1])  # Saving as a single image instead of GIF
 
         # Save landmarks
-        # print(self.landmarks_3D) # 3D
-        # print(self.extra_results["landmarks_crop"]) # Crop
-        # print(self.extra_results["landmarks_recon"]) # Recon
+        landmark_folder = os.path.join(out_extras_dir, 'landmarks')
+        landmark_folder_3D = os.path.join(landmark_folder, '3D')
+        landmark_folder_crop = os.path.join(landmark_folder, 'crop')
+        landmark_folder_recon = os.path.join(landmark_folder, 'recon')
+        landmark_file_3D = os.path.join(landmark_folder_3D, save_name + '.npy')
+        landmark_file_crop = os.path.join(landmark_folder_crop, save_name + '.npy')
+        landmark_file_recon = os.path.join(landmark_folder_recon, save_name + '.npy')
+        os.makedirs(landmark_folder, exist_ok=True)
+        os.makedirs(landmark_folder_3D, exist_ok=True)
+        os.makedirs(landmark_folder_crop, exist_ok=True)
+        os.makedirs(landmark_folder_recon, exist_ok=True)
+        np.save(landmark_file_3D, np.array(self.landmarks_3D))
+        np.save(landmark_file_crop, self.extra_results["landmarks_crop"].cpu().numpy().squeeze())
+        np.save(landmark_file_recon, self.extra_results["landmarks_recon"].cpu().numpy().squeeze())
 
-        # Save bounding box
-        # print(self.bbox)
-
-        # Save 257 coeffs
-        # print(self.pred_coeffs_dict)
+        # Save 257 coefficients
+        coeff_folder = os.path.join(out_extras_dir, 'coefficients')
+        os.makedirs(coeff_folder, exist_ok=True)
+        coeff_file = os.path.join(coeff_folder, save_name + '.npy')
+        np.save(coeff_file, self.pred_coeffs.cpu().numpy().squeeze())
 
         return results
 

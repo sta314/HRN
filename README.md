@@ -28,3 +28,13 @@ then, when needed:
 `CUDA_VISIBLE_DEVICES="1" bash -c "python custom_demo_mancrop.py --media_dir media_s_p3"`
 `CUDA_VISIBLE_DEVICES="1" bash -c "python custom_demo_mancrop.py --media_dir media_s_p4"`
 
+
+### Saves
+
+
+id_coeffs = coeffs[:, :80]
+exp_coeffs = coeffs[:, 80: 144]
+tex_coeffs = coeffs[:, 144: 224]
+angles = coeffs[:, 224: 227]
+gammas = coeffs[:, 227: 254]
+translations = coeffs[:, 254:]

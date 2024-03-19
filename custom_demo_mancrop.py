@@ -75,7 +75,7 @@ def merge_original_and_reconstructed_videos(og_path, recon_path, out_path):
     cropped_clip.close()
     output_clip.close()
 
-def run_hrn(in_dir, out_frames_dir, out_angles_dir):
+def run_hrn(in_dir, out_frames_dir, out_extras_dir):
     args = {
         'checkpoints_dir': 'assets/pretrained_models',
         'name': 'hrn_v1.1',
@@ -83,7 +83,7 @@ def run_hrn(in_dir, out_frames_dir, out_angles_dir):
         'input_type': 'single_view',
         'input_root': in_dir,
         'output_frames': out_frames_dir,
-        'output_angles': out_angles_dir,
+        'output_extras': out_extras_dir,
     }
     params = [
         '--checkpoints_dir', args['checkpoints_dir'],
@@ -103,10 +103,10 @@ def run_hrn(in_dir, out_frames_dir, out_angles_dir):
     for i, img in enumerate(tqdm(images)):
         save_name = os.path.splitext(names[i])[0]
         out_frames_dir = args['output_frames']
-        out_angles_dir = args['output_angles']
+        out_extras_dir = args['output_extras']
         os.makedirs(out_frames_dir, exist_ok=True)
-        os.makedirs(out_angles_dir, exist_ok=True)
-        reconstructor.predict(img, visualize=True, save_name=save_name, out_frames_dir=out_frames_dir, out_angles_dir=out_angles_dir, use_threshold=True)
+        os.makedirs(out_extras_dir, exist_ok=True)
+        reconstructor.predict(img, visualize=True, save_name=save_name, out_frames_dir=out_frames_dir, out_extras_dir=out_extras_dir, use_threshold=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--media_dir', default='media_mancrop', help='Directory for input files')
@@ -132,7 +132,7 @@ for i, video_name in enumerate(video_list):
     instance_frameinfo_dir = os.path.join(input_frameinfo_dir, video_name_base)
     instance_output_dir = os.path.join(output_dir, video_name_base)
     instance_output_frames_dir = os.path.join(instance_output_dir, 'frames')
-    instance_output_angles_dir = os.path.join(instance_output_dir, 'angles')
+    instance_output_extras_dir = os.path.join(instance_output_dir, 'extras')
     instance_video_path = os.path.join(input_videos_dir, video_name)
 
     frame_infos = list()
@@ -156,7 +156,7 @@ for i, video_name in enumerate(video_list):
     print('Extracting frames from the video and cropping')
     fps = video_extract_cropped_frames_and_audio(instance_video_path, frame_infos, frames_dir, audio_dir)
     print('Executing the pipeline for every frame')
-    run_hrn(frames_dir, instance_output_frames_dir, instance_output_angles_dir)
+    run_hrn(frames_dir, instance_output_frames_dir, instance_output_extras_dir)
     print('Merging resulting frames for recreating the video')
     recreate_video_from_frames(fps, instance_output_frames_dir, os.path.join(audio_dir, 'audio.mp3'), os.path.join(instance_output_dir, 'reconstruction.mp4'))
     print('Merging original video with recreated video for visualization purposes')

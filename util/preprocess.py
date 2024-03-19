@@ -139,8 +139,6 @@ def resize_n_crop_img(img, lm, t, s, target_size=224., mask=None):
     up = (h/2 - target_size/2 + float((h0/2 - t[1])*s)).astype(np.int32)
     below = up + target_size
 
-    print(left, up, right, below)
-
     new_img = img.resize((w, h), resample=Image.BICUBIC)
     new_img = new_img.crop((left, up, right, below))
 
