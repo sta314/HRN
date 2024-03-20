@@ -18,6 +18,15 @@ def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir,
 
     video_clip = VideoFileClip(video_path)
 
+    frames = []
+    for _, frame in enumerate(video_clip.iter_frames()):
+        frames.append(frame)
+
+    length_diff = len(frames) - len(boxes)
+
+    print("Length of frames: {}".format(len(frames)))
+    print("Length of boxes: {}".format(len(boxes)))
+
     fps = video_clip.fps
 
     import concurrent.futures
@@ -30,11 +39,17 @@ def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir,
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = []
-        for i, frame in enumerate(video_clip.iter_frames()):
-            if i >= len(boxes):
+        for i in range(len(frames)):
+            if i == (len(frames) - 1): # skip the frame at the end
+                print("break at {}".format(i))
                 break
-            box = boxes[i]
-            future = executor.submit(process_frame, frame, box, frames_dir, i)
+            if i < length_diff - 1: # skip remaining frames from beginning
+                print("continue at {}".format(i))
+                continue
+            print(i, i - (length_diff - 1))
+            frame = frames[i]
+            box = boxes[i - (length_diff - 1)]
+            future = executor.submit(process_frame, frame, box, frames_dir, i - (length_diff - 1))
             futures.append(future)
         concurrent.futures.wait(futures)
 
