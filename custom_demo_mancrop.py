@@ -8,7 +8,7 @@ import shutil
 import numpy as np
 import argparse
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir, output_audio_dir):
     frames_dir = output_frames_dir
@@ -24,9 +24,6 @@ def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir,
 
     length_diff = len(frames) - len(boxes)
 
-    print("Length of frames: {}".format(len(frames)))
-    print("Length of boxes: {}".format(len(boxes)))
-
     fps = video_clip.fps
 
     import concurrent.futures
@@ -41,12 +38,9 @@ def video_extract_cropped_frames_and_audio(video_path, boxes, output_frames_dir,
         futures = []
         for i in range(len(frames)):
             if i == (len(frames) - 1): # skip the frame at the end
-                print("break at {}".format(i))
                 break
             if i < length_diff - 1: # skip remaining frames from beginning
-                print("continue at {}".format(i))
                 continue
-            print(i, i - (length_diff - 1))
             frame = frames[i]
             box = boxes[i - (length_diff - 1)]
             future = executor.submit(process_frame, frame, box, frames_dir, i - (length_diff - 1))

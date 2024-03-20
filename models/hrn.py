@@ -86,7 +86,7 @@ class Reconstructor():
         input_img, scale, bbox = align_for_lm(img, five_points)  # align for 68 landmark detection
 
         if scale == 0:
-            return None
+            return None, None
 
         # detect landmarks
         input_img = np.reshape(
@@ -96,7 +96,7 @@ class Reconstructor():
         
         result, landmarks_scores, detected_faces = lm_sess.get_landmarks_from_image(input_img, return_bboxes = True, return_landmark_score=True) # EDIT
         if result is None:
-            return None
+            return None, None
     
         main_subject_idx = np.array(detected_faces)[:, -1].argmax()
         result_sbj = result[main_subject_idx]
@@ -106,7 +106,7 @@ class Reconstructor():
         if use_threshold:
             result_sbj = None if facescore_sbj < 0.99 or landmarkscore_sbj < 0.7 else result_sbj
             if result_sbj is None:
-                return None
+                return None, None
     
         landmark = result_sbj
         landmark_3D = landmark.copy()
